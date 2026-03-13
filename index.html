@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TimeTrack — Video Progress Calculator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #111118;
+      --card: #16161f;
+      --border: #2a2a3a;
+      --accent: #7c6aff;
+      --accent2: #ff6a9a;
+      --accent3: #6affcc;
+      --text: #f0eeff;
+      --muted: #6b6880;
+      --font-head: 'Syne', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Animated background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(124,106,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124,106,255,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    #root { position: relative; z-index: 1; }
+
+    .app {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 48px 20px 80px;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+    .badge {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(124,106,255,0.1);
+      border: 1px solid rgba(124,106,255,0.25);
+      padding: 5px 14px;
+      border-radius: 100px;
+      margin-bottom: 20px;
+    }
+    .title {
+      font-family: var(--font-head);
+      font-size: clamp(2rem, 6vw, 3.2rem);
+      font-weight: 800;
+      line-height: 1.1;
+      background: linear-gradient(135deg, #f0eeff 0%, var(--accent) 60%, var(--accent2) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 12px;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 14px;
+      letter-spacing: 0.02em;
+    }
+
+    /* Card */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px;
+      margin-bottom: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(124,106,255,0.4), transparent);
+    }
+
+    .section-label {
+      font-family: var(--font-head);
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Time inputs row */
+    .time-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 480px) {
+      .time-row { grid-template-columns: 1fr; }
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .input-label {
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* Time picker */
+    .time-picker {
+      display: flex;
+      align-items: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .time-picker:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(124,106,255,0.12);
+    }
+    .time-unit {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+      padding: 10px 6px;
+      border-right: 1px solid var(--border);
+    }
+    .time-unit:last-child { border-right: none; }
+    .unit-label {
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .unit-input {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 18px;
+      font-weight: 500;
+      width: 44px;
+      text-align: center;
+    }
+    .unit-input::placeholder { color: var(--border); }
+    /* hide number spinners */
+    .unit-input::-webkit-outer-spin-button,
+    .unit-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .unit-input[type=number] { -moz-appearance: textfield; }
+
+    /* OR separator */
+    .or-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 16px 0;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+    }
+    .or-row::before, .or-row::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Seconds input */
+    .seconds-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .seconds-input {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .seconds-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(124,106,255,0.12);
+    }
+    .seconds-input::placeholder { color: var(--border); }
+    .seconds-input::-webkit-outer-spin-button,
+    .seconds-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+    .seconds-input[type=number] { -moz-appearance: textfield; }
+    .seconds-hint {
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    /* Result section */
+    .result-card {
+      background: linear-gradient(135deg, rgba(124,106,255,0.08), rgba(255,106,154,0.06));
+      border: 1px solid rgba(124,106,255,0.2);
+      border-radius: 20px;
+      padding: 32px;
+      margin-bottom: 20px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .result-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(124,106,255,0.6), rgba(255,106,154,0.4), transparent);
+    }
+
+    /* Arc progress */
+    .arc-wrap {
+      position: relative;
+      width: 180px;
+      height: 180px;
+      margin: 0 auto 28px;
+    }
+    .arc-wrap svg {
+      transform: rotate(-90deg);
+    }
+    .arc-center {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .arc-pct {
+      font-family: var(--font-head);
+      font-size: 2.8rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1;
+    }
+    .arc-label {
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    /* Stats row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .stat-box {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 10px;
+      text-align: center;
+    }
+    .stat-val {
+      font-family: var(--font-head);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .stat-key {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    /* Motivational message */
+    .motivation {
+      margin-top: 20px;
+      padding: 14px 18px;
+      border-radius: 10px;
+      font-size: 13px;
+      letter-spacing: 0.02em;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .motivation.low    { background: rgba(106,255,204,0.06); border: 1px solid rgba(106,255,204,0.15); color: var(--accent3); }
+    .motivation.mid    { background: rgba(124,106,255,0.08); border: 1px solid rgba(124,106,255,0.2);  color: var(--accent); }
+    .motivation.high   { background: rgba(255,106,154,0.08); border: 1px solid rgba(255,106,154,0.2);  color: var(--accent2); }
+    .motivation.done   { background: rgba(106,255,204,0.1);  border: 1px solid rgba(106,255,204,0.3);  color: var(--accent3); }
+
+    /* Progress bar */
+    .bar-wrap {
+      height: 6px;
+      background: var(--border);
+      border-radius: 100px;
+      overflow: hidden;
+      margin-top: 16px;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 100px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      transition: width 0.6s cubic-bezier(.25,.8,.25,1);
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+    .empty-icon { font-size: 2.4rem; margin-bottom: 12px; opacity: 0.5; }
+
+    /* Reset btn */
+    .reset-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0 auto;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      padding: 8px 18px;
+      border-radius: 100px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .reset-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Footer */
+    .footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 40px;
+      letter-spacing: 0.05em;
+    }
+    .footer a { color: var(--accent); text-decoration: none; }
+
+    /* Pulse animation for 100% */
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(106,255,204,0.3); }
+      50% { box-shadow: 0 0 20px 6px rgba(106,255,204,0.15); }
+    }
+    .done-glow { animation: pulse-glow 2s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useCallback, useMemo } = React;
+
+    const RADIUS = 78;
+    const CIRC   = 2 * Math.PI * RADIUS;
+
+    function toSec(h, m, s) {
+      return (+h || 0) * 3600 + (+m || 0) * 60 + (+s || 0);
+    }
+    function fmtTime(sec) {
+      if (!sec && sec !== 0) return '--';
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      if (h > 0) return `${h}h ${m}m ${s}s`;
+      if (m > 0) return `${m}m ${s}s`;
+      return `${s}s`;
+    }
+    function motivation(pct) {
+      if (pct >= 100) return { cls: 'done',  icon: '🎉', msg: "You finished it! That's a win. Go celebrate." };
+      if (pct >= 75)  return { cls: 'high',  icon: '🔥', msg: "So close! Last stretch — don't stop now." };
+      if (pct >= 50)  return { cls: 'mid',   icon: '⚡', msg: "Past halfway! Momentum is on your side." };
+      if (pct >= 25)  return { cls: 'low',   icon: '🌱', msg: "Good start. Keep the rhythm going." };
+      return           { cls: 'low',          icon: '🚀', msg: "Just getting started. Every second counts!" };
+    }
+
+    function TimeUnit({ label, value, onChange, max }) {
+      return (
+        <div className="time-unit">
+          <span className="unit-label">{label}</span>
+          <input
+            className="unit-input"
+            type="number"
+            min="0"
+            max={max}
+            placeholder="00"
+            value={value}
+            onChange={e => onChange(e.target.value)}
+          />
+        </div>
+      );
+    }
+
+    function TimePicker({ label, val, onChange }) {
+      const set = key => v => onChange({ ...val, [key]: v });
+      return (
+        <div className="input-group">
+          <span className="input-label">{label}</span>
+          <div className="time-picker">
+            <TimeUnit label="HH" value={val.h} onChange={set('h')} max="99" />
+            <TimeUnit label="MM" value={val.m} onChange={set('m')} max="59" />
+            <TimeUnit label="SS" value={val.s} onChange={set('s')} max="59" />
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const empty = { h: '', m: '', s: '' };
+      const [total,   setTotal]   = useState(empty);
+      const [watched, setWatched] = useState(empty);
+      const [totSec,  setTotSec]  = useState('');
+      const [watSec,  setWatSec]  = useState('');
+      const [mode,    setMode]    = useState('picker'); // 'picker' | 'seconds'
+
+      const totalSeconds   = mode === 'picker' ? toSec(total.h,   total.m,   total.s)   : (+totSec || 0);
+      const watchedSeconds = mode === 'picker' ? toSec(watched.h, watched.m, watched.s) : (+watSec || 0);
+
+      const hasInput = totalSeconds > 0 || watchedSeconds > 0;
+
+      const pct = useMemo(() => {
+        if (!totalSeconds) return 0;
+        return Math.min(100, Math.round((watchedSeconds / totalSeconds) * 10000) / 100);
+      }, [totalSeconds, watchedSeconds]);
+
+      const remaining = Math.max(0, totalSeconds - watchedSeconds);
+      const dashOffset = CIRC - (pct / 100) * CIRC;
+      const mot = motivation(pct);
+      const showResult = totalSeconds > 0 && watchedSeconds >= 0;
+
+      const reset = () => {
+        setTotal(empty); setWatched(empty);
+        setTotSec(''); setWatSec('');
+      };
+
+      return (
+        <div className="app">
+          {/* Header */}
+          <div className="header">
+            <div className="badge">▶ Video Progress Tracker</div>
+            <h1 className="title">Time Percentage<br/>Calculator</h1>
+            <p className="subtitle">Track how much of a video you've watched — stay motivated.</p>
+          </div>
+
+          {/* Input mode toggle */}
+          <div className="card">
+            <div className="section-label">Input Mode</div>
+            <div style={{display:'flex', gap:8, marginBottom:24}}>
+              {['picker','seconds'].map(m => (
+                <button key={m} onClick={() => { setMode(m); reset(); }} style={{
+                  flex:1, padding:'9px 0', borderRadius:10,
+                  border: mode===m ? '1px solid var(--accent)' : '1px solid var(--border)',
+                  background: mode===m ? 'rgba(124,106,255,0.12)' : 'var(--surface)',
+                  color: mode===m ? 'var(--accent)' : 'var(--muted)',
+                  fontFamily:'var(--font-mono)', fontSize:12,
+                  letterSpacing:'0.08em', cursor:'pointer', transition:'all 0.2s'
+                }}>
+                  {m === 'picker' ? '⏱  HH : MM : SS' : '🔢  Total Seconds'}
+                </button>
+              ))}
+            </div>
+
+            {mode === 'picker' ? (
+              <div className="time-row">
+                <TimePicker label="📹 Total Video Length" val={total}   onChange={setTotal}   />
+                <TimePicker label="✅ Time Watched So Far"  val={watched} onChange={setWatched} />
+              </div>
+            ) : (
+              <div className="time-row">
+                <div className="input-group">
+                  <span className="input-label">📹 Total Duration (seconds)</span>
+                  <input className="seconds-input" type="number" min="0" placeholder="e.g. 7200"
+                    value={totSec} onChange={e => setTotSec(e.target.value)} />
+                </div>
+                <div className="input-group">
+                  <span className="input-label">✅ Watched (seconds)</span>
+                  <input className="seconds-input" type="number" min="0" placeholder="e.g. 1800"
+                    value={watSec} onChange={e => setWatSec(e.target.value)} />
+                </div>
+              </div>
+            )}
+
+            <button className="reset-btn" onClick={reset}>↺ Reset</button>
+          </div>
+
+          {/* Result */}
+          {showResult ? (
+            <div className={`result-card ${pct >= 100 ? 'done-glow' : ''}`}>
+              {/* Arc */}
+              <div className="arc-wrap">
+                <svg width="180" height="180" viewBox="0 0 180 180">
+                  <circle cx="90" cy="90" r={RADIUS} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="10"/>
+                  <circle cx="90" cy="90" r={RADIUS} fill="none"
+                    stroke="url(#arcGrad)"
+                    strokeWidth="10"
+                    strokeLinecap="round"
+                    strokeDasharray={CIRC}
+                    strokeDashoffset={dashOffset}
+                    style={{transition:'stroke-dashoffset 0.7s cubic-bezier(.25,.8,.25,1)'}}
+                  />
+                  <defs>
+                    <linearGradient id="arcGrad" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#7c6aff"/>
+                      <stop offset="100%" stopColor="#ff6a9a"/>
+                    </linearGradient>
+                  </defs>
+                </svg>
+                <div className="arc-center">
+                  <span className="arc-pct">{pct}%</span>
+                  <span className="arc-label">Complete</span>
+                </div>
+              </div>
+
+              {/* Bar */}
+              <div className="bar-wrap">
+                <div className="bar-fill" style={{width: `${pct}%`}}/>
+              </div>
+
+              {/* Stats */}
+              <div className="stats-row">
+                <div className="stat-box">
+                  <div className="stat-val">{fmtTime(totalSeconds)}</div>
+                  <div className="stat-key">Total</div>
+                </div>
+                <div className="stat-box">
+                  <div className="stat-val">{fmtTime(watchedSeconds)}</div>
+                  <div className="stat-key">Watched</div>
+                </div>
+                <div className="stat-box">
+                  <div className="stat-val" style={{color: remaining===0 ? 'var(--accent3)' : 'var(--text)'}}>
+                    {remaining === 0 ? '🎉 Done!' : fmtTime(remaining)}
+                  </div>
+                  <div className="stat-key">Remaining</div>
+                </div>
+              </div>
+
+              {/* Motivation */}
+              <div className={`motivation ${mot.cls}`}>
+                <span style={{fontSize:'1.2rem'}}>{mot.icon}</span>
+                <span>{mot.msg}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="card">
+              <div className="empty-state">
+                <div className="empty-icon">🎬</div>
+                Enter the video length and how much you've watched<br/>
+                to see your progress percentage.
+              </div>
+            </div>
+          )}
+
+          <div className="footer">
+            built with ♥ to keep you motivated · TimeTrack Calculator
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
